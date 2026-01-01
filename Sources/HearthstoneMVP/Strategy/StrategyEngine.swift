@@ -2,6 +2,13 @@ import Foundation
 
 final class StrategyEngine {
     func advise(for state: GameState) -> Advice {
+        if let mode = state.mode, mode != .battlegrounds {
+            return Advice(
+                headline: "当前模式：\(mode.displayName)",
+                details: ["进入酒馆战棋后自动切换为实时提示。"]
+            )
+        }
+
         guard let turn = state.turn, let gold = state.gold else {
             return .empty
         }

@@ -82,7 +82,16 @@ final class CaptureManager: NSObject {
 
         ocrQueue.async { [weak self] in
             guard let self else { return }
-            var partial = PartialGameState(timestamp: Date(), turn: nil, gold: nil, health: nil, tavernTier: nil)
+            var partial = PartialGameState(
+                timestamp: Date(),
+                turn: nil,
+                gold: nil,
+                health: nil,
+                tavernTier: nil,
+                phase: nil,
+                step: nil,
+                mode: nil
+            )
 
             for region in self.config.regions {
                 guard let crop = self.crop(image: cgImage, normalizedRect: region.normalizedRect) else { continue }

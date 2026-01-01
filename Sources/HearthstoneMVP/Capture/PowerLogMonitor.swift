@@ -9,6 +9,7 @@ final class PowerLogMonitor {
     private var lastTagValues: [String: Int] = [:]
     private var resourcesByPlayer: [Int: PlayerResources] = [:]
     private var playerNameToId: [String: Int] = [:]
+    private var currentGameMode: GameMode?
 
     private let tagValueRegex = try? NSRegularExpression(
         pattern: "tag=([A-Z0-9_]+)\\s+value=([^\\s]+)",
@@ -32,6 +33,10 @@ final class PowerLogMonitor {
     )
     private let entityNameRegex = try? NSRegularExpression(
         pattern: "TAG_CHANGE Entity=([^\\s]+)\\s+tag=",
+        options: []
+    )
+    private let gameTypeRegex = try? NSRegularExpression(
+        pattern: "GameType=([A-Z_]+|\\d+)",
         options: []
     )
 
@@ -85,6 +90,7 @@ final class PowerLogMonitor {
         lastTagValues.removeAll(keepingCapacity: true)
         resourcesByPlayer.removeAll(keepingCapacity: true)
         playerNameToId.removeAll(keepingCapacity: true)
+        currentGameMode = nil
     }
 
     private func process(data: Data) {
@@ -100,10 +106,32 @@ final class PowerLogMonitor {
     }
 
     private func handleLine(_ line: String) {
+        if line.contains("CREATE_GAME") {
+            resetForNewGame()
+        }
+
         resolvePlayerNameMapping(from: line)
         if localPlayerId == nil {
             resolveLocalPlayerId(from: line)
         }
+        let detectedMode = detectGameMode(from: line)
+        if let detectedMode {
+            currentGameMode = detectedMode
+            let partial = PartialGameState(
+                timestamp: Date(),
+                turn: nil,
+                gold: nil,
+                health: nil,
+                tavernTier: nil,
+                phase: nil,
+                step: nil,
+                mode: detectedMode
+            )
+            DispatchQueue.main.async { [weak self] in
+                self?.onStateUpdate?(partial)
+            }
+        }
+
         guard line.contains("TAG_CHANGE") else { return }
         guard let (rawTag, rawValue) = extractTagValue(from: line) else { return }
 
@@ -115,8 +143,21 @@ final class PowerLogMonitor {
             return
         }
 
+        if currentGameMode == .other {
+            return
+        }
+
         let entityPlayerId = extractPlayerId(from: line)
-        var partial = PartialGameState(timestamp: Date(), turn: nil, gold: nil, health: nil, tavernTier: nil, phase: nil, step: nil)
+        var partial = PartialGameState(
+            timestamp: Date(),
+            turn: nil,
+            gold: nil,
+            health: nil,
+            tavernTier: nil,
+            phase: nil,
+            step: nil,
+            mode: nil
+        )
         var hasUpdate = false
 
         switch tag {
@@ -322,6 +363,33 @@ final class PowerLogMonitor {
             return nil
         }
         return String(line[nameRange])
+    }
+
+    private func detectGameMode(from line: String) -> GameMode? {
+        guard let regex = gameTypeRegex else { return nil }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, options: [], range: range),
+              let typeRange = Range(match.range(at: 1), in: line) else {
+            return nil
+        }
+
+        let raw = String(line[typeRange]).uppercased()
+        if raw.contains("BATTLEGROUNDS") {
+            return .battlegrounds
+        }
+        if raw == "8" || raw == "50" { // Known GameType values for Battlegrounds
+            return .battlegrounds
+        }
+        return .other
+    }
+
+    private func resetForNewGame() {
+        buffer.removeAll(keepingCapacity: true)
+        localPlayerId = nil
+        resourcesByPlayer.removeAll(keepingCapacity: true)
+        lastTagValues.removeAll(keepingCapacity: true)
+        playerNameToId.removeAll(keepingCapacity: true)
+        currentGameMode = nil
     }
 
     private static func resolveDefaultLogURL() -> URL {

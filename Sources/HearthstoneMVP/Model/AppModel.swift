@@ -36,7 +36,7 @@ final class AppModel: ObservableObject {
     }
 
     private let captureManager: CaptureManager
-    private let logMonitor = PowerLogMonitor()
+    private let logMonitor = UnifiedLogMonitor()
     private let engine = StrategyEngine()
     let config: CaptureConfig
 

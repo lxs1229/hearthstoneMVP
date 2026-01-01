@@ -104,6 +104,7 @@ struct ContentView: View {
                 Text("血量：\(valueText(model.state.health))")
                 Text("酒馆等级：\(valueText(model.state.tavernTier))")
                 Text("阶段：\(phaseText(model.state.phase))")
+                Text("模式：\(modeText(model.state.mode))")
                 Text("系统步骤：\(stepText(model.state.step))")
             }
             .font(.system(size: 12))
@@ -198,5 +199,10 @@ struct ContentView: View {
             return "等待日志"
         }
         return "已更新"
+    }
+
+    private func modeText(_ mode: GameMode?) -> String {
+        guard let mode else { return "—" }
+        return mode.displayName
     }
 }
